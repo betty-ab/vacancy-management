@@ -1,13 +1,46 @@
+// src/pages/Vacancies.tsx
 import { useState, useMemo, useEffect } from 'react';
 import { Search, SlidersHorizontal, X, MapPin, Building2, Briefcase, Inbox } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
-import { vacancies, companies, departments, locations, getCompany } from '@/lib/data';
+import { api } from '@/lib/api';
 import { JobCard } from '@/components/JobCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+
+interface Vacancy {
+  id: string;
+  title: string;
+  companyId: string;
+  department: string;
+  location: string;
+  type: string;
+  experienceLevel: string;
+  experienceYears: string;
+  salaryRange: string;
+  postedDate: string;
+  closingDate: string;
+  summary: string;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  preferred: string[];
+  documents: string[];
+  featured: boolean;
+  company?: {
+    id: string;
+    name: string;
+    shortName: string;
+  };
+}
+
+interface Company {
+  id: string;
+  name: string;
+  shortName: string;
+}
 
 export function Vacancies() {
   const { params } = useApp();
@@ -17,10 +50,32 @@ export function Vacancies() {
   const [department, setDepartment] = useState(params.department || 'all');
   const [type, setType] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
 
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 400);
-    return () => clearTimeout(t);
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [vacanciesData, companiesData, locationsData, departmentsData] = await Promise.all([
+          api.getVacancies(),
+          api.getCompanies(),
+          api.getLocations(),
+          api.getDepartments()
+        ]);
+        setVacancies(vacanciesData);
+        setCompanies(companiesData);
+        setLocations(locationsData);
+        setDepartments(departmentsData);
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
   }, []);
 
   const filtered = useMemo(() => {
@@ -32,7 +87,9 @@ export function Vacancies() {
       if (type !== 'all' && v.type !== type) return false;
       return true;
     });
-  }, [search, company, location, department, type]);
+  }, [vacancies, search, company, location, department, type]);
+
+  const getCompany = (id: string) => companies.find(c => c.id === id);
 
   const activeFilters = [company !== 'all' && company, location !== 'all' && location, department !== 'all' && department, type !== 'all' && type].filter(Boolean);
 
@@ -42,7 +99,6 @@ export function Vacancies() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Header */}
       <div className="mb-8">
         <p className="text-sm font-medium uppercase tracking-wider text-accent">Open Positions</p>
         <h1 className="mt-1 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -53,7 +109,6 @@ export function Vacancies() {
         </p>
       </div>
 
-      {/* Search + Filters */}
       <div className="mb-6 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -69,21 +124,27 @@ export function Vacancies() {
             <SelectTrigger className="h-10"><Building2 className="mr-1.5 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Company" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Companies</SelectItem>
-              {companies.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {companies.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={location} onValueChange={setLocation}>
             <SelectTrigger className="h-10"><MapPin className="mr-1.5 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Location" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Locations</SelectItem>
-              {locations.map((l) => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+              {locations.map((l) => (
+                <SelectItem key={l} value={l}>{l}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={department} onValueChange={setDepartment}>
             <SelectTrigger className="h-10"><Briefcase className="mr-1.5 h-4 w-4 text-muted-foreground" /><SelectValue placeholder="Department" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Departments</SelectItem>
-              {departments.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              {departments.map((d) => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Select value={type} onValueChange={setType}>

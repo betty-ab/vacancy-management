@@ -1,5 +1,5 @@
+// src/components/JobCard.tsx
 import { useApp } from '@/lib/app-context';
-import { getCompany, type Vacancy } from '@/lib/data';
 import { formatDate } from '@/lib/data';
 import { MapPin, Briefcase, Clock, ArrowRight, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -7,9 +7,35 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+interface Vacancy {
+  id: string;
+  title: string;
+  companyId: string;
+  department: string;
+  location: string;
+  type: string;
+  experienceLevel: string;
+  experienceYears: string;
+  salaryRange: string;
+  postedDate: string;
+  closingDate: string;
+  summary: string;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  preferred: string[];
+  documents: string[];
+  featured: boolean;
+  company?: {
+    id: string;
+    name: string;
+    shortName: string;
+  };
+}
+
 export function JobCard({ vacancy, className }: { vacancy: Vacancy; className?: string }) {
   const { navigate } = useApp();
-  const company = getCompany(vacancy.companyId);
+  const company = vacancy.company;
 
   return (
     <Card

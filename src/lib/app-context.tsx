@@ -1,5 +1,7 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
-import { candidates as initialCandidates, type Candidate, type ApplicationStatus } from '@/lib/data';
+// src/lib/app-context.tsx
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react';
+import { api } from '@/lib/api';
+import { type Candidate, type ApplicationStatus } from './data';
 
 interface AppContextValue {
   page: string;
@@ -8,8 +10,10 @@ interface AppContextValue {
   hrMode: boolean;
   setHrMode: (v: boolean) => void;
   candidates: Candidate[];
-  updateCandidateStatus: (id: string, status: ApplicationStatus) => void;
-  addCandidateNote: (id: string, text: string) => void;
+  loading: boolean;
+  refreshCandidates: () => Promise<void>;
+  updateCandidateStatus: (id: string, status: ApplicationStatus) => Promise<void>;
+  addCandidateNote: (id: string, text: string) => Promise<void>;
   addCandidate: (c: Candidate) => void;
   selectedCandidateId: string | null;
   setSelectedCandidateId: (id: string | null) => void;
@@ -22,7 +26,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [params, setParams] = useState<Record<string, string>>({});
   const [hrMode, setHrMode] = useState(false);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
-  const [candidates, setCandidates] = useState<Candidate[]>(initialCandidates);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load candidates from API
+  const refreshCandidates = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.getCandidates();
+      setCandidates(data);
+    } catch (error) {
+      console.error('Failed to load candidates:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    refreshCandidates();
+  }, [refreshCandidates]);
 
   const navigate = useCallback((newPage: string, newParams: Record<string, string> = {}) => {
     setPage(newPage);
@@ -30,31 +53,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const updateCandidateStatus = useCallback((id: string, status: ApplicationStatus) => {
-    setCandidates((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status } : c))
-    );
-  }, []);
+  const updateCandidateStatus = useCallback(async (id: string, status: ApplicationStatus) => {
+    try {
+      await api.updateCandidateStatus(id, status);
+      await refreshCandidates(); // Refresh the list
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      throw error;
+    }
+  }, [refreshCandidates]);
 
-  const addCandidateNote = useCallback((id: string, text: string) => {
-    setCandidates((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? {
-              ...c,
-              notes: [
-                ...c.notes,
-                { author: 'You', date: new Date().toISOString().split('T')[0], text },
-              ],
-            }
-          : c
-      )
-    );
-  }, []);
+  const addCandidateNote = useCallback(async (id: string, text: string) => {
+    try {
+      await api.addCandidateNote(id, text);
+      await refreshCandidates(); // Refresh the list
+    } catch (error) {
+      console.error('Failed to add note:', error);
+      throw error;
+    }
+  }, [refreshCandidates]);
 
   const addCandidate = useCallback((c: Candidate) => {
-    setCandidates((prev) => [c, ...prev]);
-  }, []);
+    // The API already adds the candidate, so we just refresh
+    refreshCandidates();
+  }, [refreshCandidates]);
 
   return (
     <AppContext.Provider
@@ -65,6 +87,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         hrMode,
         setHrMode,
         candidates,
+        loading,
+        refreshCandidates,
         updateCandidateStatus,
         addCandidateNote,
         addCandidate,

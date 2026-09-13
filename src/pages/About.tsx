@@ -1,12 +1,51 @@
+import { useState, useEffect } from 'react';
 import { Building2, Target, Eye, Heart, Globe2, Users, TrendingUp, Sparkles } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
-import { companies } from '@/lib/data';
+import { api } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
+interface Company {
+  id: string;
+  name: string;
+  shortName: string;
+  tagline: string;
+  description: string;
+  industry: string;
+  location: string;
+  employees: string;
+  founded: string;
+  accent: string;
+  icon: string;
+}
+
 export function About() {
   const { navigate } = useApp();
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const data = await api.getCompanies();
+        setCompanies(data);
+      } catch (error) {
+        console.error('Failed to fetch companies:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div>

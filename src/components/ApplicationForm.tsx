@@ -1,13 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Check, ChevronRight, ChevronLeft, User, GraduationCap,
   Briefcase, Upload, PartyPopper, Copy, Home, Search,
 } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
-import {
-  getVacancy, getCompany, generateReference, companies, departments, locations,
-  jobCategories, type Candidate, type EmploymentType, type ExperienceLevel,
-} from '@/lib/data';
+import { api } from '@/lib/api';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -46,14 +43,62 @@ const empty: FormState = {
   totalExperience: '', relevantExperience: '', availability: '', expectedSalary: '',
 };
 
+// Qualification options
+const qualificationOptions = [
+  'High School',
+  'Diploma',
+  "Bachelor's Degree",
+  "Master's Degree",
+  'PhD'
+];
+
+// Status options
+const statusOptions = [
+  'Employed',
+  'Unemployed',
+  'Self-employed',
+  'Student'
+];
+
+// Availability options
+const availabilityOptions = [
+  'Immediate',
+  '2 weeks',
+  '1 month notice',
+  '2 months notice',
+  '3 months notice'
+];
+
 export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boolean; onOpenChange: (v: boolean) => void; vacancyId: string }) {
-  const { navigate, addCandidate } = useApp();
-  const vacancy = useMemo(() => getVacancy(vacancyId), [vacancyId]);
-  const company = vacancy ? getCompany(vacancy.companyId) : undefined;
+  const { navigate, refreshCandidates } = useApp();
+  const [vacancy, setVacancy] = useState<any>(null);
+  const [company, setCompany] = useState<any>(null);
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(empty);
   const [reference, setReference] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+
+  // Fetch vacancy data
+  useEffect(() => {
+    if (open && vacancyId) {
+      const fetchVacancy = async () => {
+        try {
+          const data = await api.getVacancy(vacancyId);
+          setVacancy(data);
+          if (data.companyId) {
+            const companyData = await api.getCompany(data.companyId);
+            setCompany(companyData);
+          }
+        } catch (error) {
+          console.error('Failed to fetch vacancy:', error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchVacancy();
+    }
+  }, [open, vacancyId]);
 
   const set = (key: keyof FormState, value: string) => {
     setForm((p) => ({ ...p, [key]: value }));
@@ -93,44 +138,45 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
 
   const back = () => step > 1 && setStep(step - 1);
 
-  const submit = () => {
-    const ref = generateReference();
-    setReference(ref);
-    const newCandidate: Candidate = {
-      id: `c-${Date.now()}`,
-      fullName: form.fullName,
-      email: form.email,
-      phone: form.phone,
-      altPhone: form.altPhone || undefined,
-      city: form.city,
-      nationality: form.nationality,
-      highestQualification: form.qualification,
-      fieldOfStudy: form.fieldOfStudy,
-      institution: form.institution,
-      graduationYear: form.graduationYear,
-      cgpa: form.cgpa || 'N/A',
-      currentStatus: form.currentStatus,
-      currentEmployer: form.currentEmployer || undefined,
-      currentRole: form.currentRole || undefined,
-      totalExperience: form.totalExperience,
-      relevantExperience: form.relevantExperience || 'N/A',
-      expectedSalary: form.expectedSalary,
-      availability: form.availability,
-      preferredCompany: vacancy?.companyId || '',
-      preferredDepartment: vacancy?.department || '',
-      vacancyId: vacancy?.id,
-      status: 'Submitted',
-      submittedAt: new Date().toISOString(),
-      documents: [
-        { name: `${form.fullName.replace(/\s/g, '_')}_CV.pdf`, type: 'PDF', size: '284 KB' },
-        { name: 'Cover_Letter.pdf', type: 'PDF', size: '112 KB' },
-      ],
-      notes: [],
-      reference: ref,
-    };
-    addCandidate(newCandidate);
-    setStep(5);
-    toast.success('Application submitted successfully!');
+  const submit = async () => {
+    try {
+      // Generate reference
+      const year = new Date().getFullYear();
+      const num = Math.floor(1000 + Math.random() * 9000);
+      const ref = `OVID-${year}-${num}`;
+      setReference(ref);
+
+      const formData = {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        altPhone: form.altPhone,
+        city: form.city,
+        nationality: form.nationality,
+        qualification: form.qualification,
+        fieldOfStudy: form.fieldOfStudy,
+        institution: form.institution,
+        graduationYear: form.graduationYear,
+        cgpa: form.cgpa || 'N/A',
+        currentStatus: form.currentStatus,
+        currentEmployer: form.currentEmployer,
+        currentRole: form.currentRole,
+        totalExperience: form.totalExperience,
+        relevantExperience: form.relevantExperience || 'N/A',
+        expectedSalary: form.expectedSalary,
+        availability: form.availability,
+        preferredCompany: vacancy?.companyId || '',
+        preferredDepartment: vacancy?.department || '',
+        vacancyId: vacancy?.id || null,
+      };
+
+      await api.submitApplication(formData);
+      await refreshCandidates();
+      setStep(5);
+      toast.success('Application submitted successfully!');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit application');
+    }
   };
 
   const reset = () => {
@@ -146,17 +192,29 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
     navigate(page);
   };
 
+  if (loading && open) {
+    return (
+      <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
+        <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto p-0 scrollbar-thin">
+          <div className="flex items-center justify-center p-12">
+            <div className="text-muted-foreground">Loading...</div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto p-0 scrollbar-thin">
         <DialogHeader className="border-b border-border px-6 py-4">
           <DialogTitle className="font-serif text-xl">
-            {step === 5 ? 'Application Submitted' : `Apply: ${vacancy?.title}`}
+            {step === 5 ? 'Application Submitted' : `Apply: ${vacancy?.title || 'Position'}`}
           </DialogTitle>
           <DialogDescription>
             {step === 5
               ? 'Your application has been received'
-              : `${company?.name} · ${vacancy?.location} · Step ${step} of 4`}
+              : `${company?.name || ''} · ${vacancy?.location || ''} · Step ${step} of 4`}
           </DialogDescription>
         </DialogHeader>
 
@@ -243,11 +301,9 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
                   <Select value={form.qualification} onValueChange={(v) => set('qualification', v)}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="High School">High School</SelectItem>
-                      <SelectItem value="Diploma">Diploma</SelectItem>
-                      <SelectItem value="Bachelor's Degree">Bachelor's Degree</SelectItem>
-                      <SelectItem value="Master's Degree">Master's Degree</SelectItem>
-                      <SelectItem value="PhD">PhD</SelectItem>
+                      {qualificationOptions.map((q) => (
+                        <SelectItem key={q} value={q}>{q}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -280,10 +336,9 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
                   <Select value={form.currentStatus} onValueChange={(v) => set('currentStatus', v)}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Employed">Employed</SelectItem>
-                      <SelectItem value="Unemployed">Unemployed</SelectItem>
-                      <SelectItem value="Self-employed">Self-employed</SelectItem>
-                      <SelectItem value="Student">Student</SelectItem>
+                      {statusOptions.map((s) => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -303,11 +358,9 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
                   <Select value={form.availability} onValueChange={(v) => set('availability', v)}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Immediate">Immediate</SelectItem>
-                      <SelectItem value="2 weeks">2 weeks</SelectItem>
-                      <SelectItem value="1 month notice">1 month notice</SelectItem>
-                      <SelectItem value="2 months notice">2 months notice</SelectItem>
-                      <SelectItem value="3 months notice">3 months notice</SelectItem>
+                      {availabilityOptions.map((a) => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </Field>
@@ -341,7 +394,7 @@ export function ApplicationForm({ open, onOpenChange, vacancyId }: { open: boole
               </div>
               <h3 className="font-serif text-2xl font-semibold">Application Received!</h3>
               <p className="mt-2 max-w-md text-muted-foreground">
-                Thank you, {form.fullName.split(' ')[0]}. Your application for <strong className="text-foreground">{vacancy?.title}</strong> at {company?.name} has been submitted successfully.
+                Thank you, {form.fullName.split(' ')[0]}. Your application for <strong className="text-foreground">{vacancy?.title || 'position'}</strong> at {company?.name || 'Ovid'} has been submitted successfully.
               </p>
               <div className="mt-6 w-full max-w-sm">
                 <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Your Application Reference</p>

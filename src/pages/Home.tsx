@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+// src/pages/Home.tsx
+import { useState, useMemo, useEffect } from 'react';
 import {
   Search, MapPin, Building2, Briefcase, ArrowRight, Sparkles,
   Users, Award, Globe2, TrendingUp, Quote, ChevronRight,
 } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
-import { vacancies, companies, departments, locations, getCompany, formatDate } from '@/lib/data';
+import { api } from '@/lib/api';
 import { JobCard } from '@/components/JobCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,42 @@ import {
 } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+
+// Add these imports for the API data types
+interface Company {
+  id: string;
+  name: string;
+  shortName: string;
+  tagline: string;
+  description: string;
+  industry: string;
+  location: string;
+  employees: string;
+  founded: string;
+  accent: string;
+  icon: string;
+}
+
+interface Vacancy {
+  id: string;
+  title: string;
+  companyId: string;
+  department: string;
+  location: string;
+  type: string;
+  experienceLevel: string;
+  experienceYears: string;
+  salaryRange: string;
+  postedDate: string;
+  closingDate: string;
+  summary: string;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  preferred: string[];
+  documents: string[];
+  featured: boolean;
+}
 
 const companyIcons: Record<string, typeof Building2> = {
   'ovid-realestate': Building2,
@@ -30,12 +67,50 @@ export function Home() {
   const [company, setCompany] = useState('all');
   const [location, setLocation] = useState('all');
   const [department, setDepartment] = useState('all');
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
+  const [departments, setDepartments] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const featuredJobs = useMemo(() => vacancies.filter((v) => v.featured).slice(0, 4), []);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [vacanciesData, companiesData, locationsData, departmentsData] = await Promise.all([
+          api.getVacancies(),
+          api.getCompanies(),
+          api.getLocations(),
+          api.getDepartments()
+        ]);
+        setVacancies(vacanciesData);
+        setCompanies(companiesData);
+        setLocations(locationsData);
+        setDepartments(departmentsData);
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const featuredJobs = useMemo(() => 
+    vacancies.filter((v) => v.featured).slice(0, 4), 
+    [vacancies]
+  );
 
   const handleSearch = () => {
     navigate('vacancies', { search, company, location, department });
   };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -123,7 +198,7 @@ export function Home() {
           <div className="mx-auto mt-14 grid max-w-3xl grid-cols-2 gap-6 sm:grid-cols-4">
             {[
               { icon: Briefcase, label: 'Open Roles', value: `${vacancies.length}` },
-              { icon: Building2, label: 'Subsidiaries', value: '6' },
+              { icon: Building2, label: 'Subsidiaries', value: `${companies.length}` },
               { icon: Users, label: 'Team Members', value: '3,400+' },
               { icon: Globe2, label: 'Countries', value: '6' },
             ].map((stat) => (

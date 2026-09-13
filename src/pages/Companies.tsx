@@ -1,19 +1,87 @@
-import { useState, useMemo } from 'react';
+// src/pages/Companies.tsx
+import { useState, useMemo, useEffect } from 'react';
 import { Building2, MapPin, Users, Calendar, ArrowRight, Briefcase } from 'lucide-react';
 import { useApp } from '@/lib/app-context';
-import { companies, vacancies, getCompany } from '@/lib/data';
+import { api } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { JobCard } from '@/components/JobCard';
 import { cn } from '@/lib/utils';
 
+interface Company {
+  id: string;
+  name: string;
+  shortName: string;
+  tagline: string;
+  description: string;
+  industry: string;
+  location: string;
+  employees: string;
+  founded: string;
+  accent: string;
+  icon: string;
+}
+
+interface Vacancy {
+  id: string;
+  title: string;
+  companyId: string;
+  department: string;
+  location: string;
+  type: string;
+  experienceLevel: string;
+  experienceYears: string;
+  salaryRange: string;
+  postedDate: string;
+  closingDate: string;
+  summary: string;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  preferred: string[];
+  documents: string[];
+  featured: boolean;
+}
+
 export function Companies() {
   const { params, navigate } = useApp();
-  const [selectedId, setSelectedId] = useState(params.id || companies[0].id);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [selectedId, setSelectedId] = useState(params.id || '');
+  const [loading, setLoading] = useState(true);
 
-  const selected = useMemo(() => getCompany(selectedId), [selectedId]);
-  const companyVacancies = useMemo(() => vacancies.filter((v) => v.companyId === selectedId), [selectedId]);
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [companiesData, vacanciesData] = await Promise.all([
+          api.getCompanies(),
+          api.getVacancies()
+        ]);
+        setCompanies(companiesData);
+        setVacancies(vacanciesData);
+        if (!selectedId && companiesData.length > 0) {
+          setSelectedId(companiesData[0].id);
+        }
+      } catch (error) {
+        console.error('Failed to fetch data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  const selected = useMemo(() => companies.find(c => c.id === selectedId), [companies, selectedId]);
+  const companyVacancies = useMemo(() => vacancies.filter((v) => v.companyId === selectedId), [vacancies, selectedId]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -25,7 +93,6 @@ export function Companies() {
         </p>
       </div>
 
-      {/* Company selector tabs */}
       <div className="mb-8 flex flex-wrap gap-2">
         {companies.map((c) => (
           <button
@@ -45,7 +112,6 @@ export function Companies() {
 
       {selected && (
         <div className="grid gap-8 lg:grid-cols-3">
-          {/* Company detail */}
           <div className="lg:col-span-2">
             <Card className={cn('relative overflow-hidden border-0', 'bg-primary text-primary-foreground')}>
               <div className={cn('absolute inset-0 bg-gradient-to-br opacity-20', selected.accent)} />
@@ -82,7 +148,6 @@ export function Companies() {
               </div>
             </Card>
 
-            {/* Open positions */}
             <div className="mt-8">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-serif text-xl font-semibold">Open Positions at {selected.name}</h3>
@@ -106,7 +171,6 @@ export function Companies() {
             </div>
           </div>
 
-          {/* Sidebar - all companies */}
           <div className="lg:col-span-1">
             <div className="sticky top-20 space-y-3">
               <h4 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">All Companies</h4>
